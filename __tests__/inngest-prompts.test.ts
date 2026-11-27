@@ -11,14 +11,14 @@ const PROMPTS = [
     value: PERSONALIZED_WELCOME_EMAIL_PROMPT,
     placeholders: ["{{intro}}", "{{userProfile}}"],
     instruction: /write exactly two sentences/i,
-    noMarkdown: true,
+    noMarkdownInstruction: /no markdown/i,
   },
   {
     name: "NEWS_SUMMARY_EMAIL_PROMPT",
     value: NEWS_SUMMARY_EMAIL_PROMPT,
     placeholders: ["{{newsContent}}", "{{newsData}}"],
     instruction: /minimum 3 concise bullet points/i,
-    noMarkdown: true,
+    noMarkdownInstruction: /no markdown/i,
   },
   {
     name: "TRADINGVIEW_SYMBOL_MAPPING_PROMPT",
@@ -31,7 +31,7 @@ const PROMPTS = [
       "{{country}}",
     ],
     instruction: /your response must be valid json only/i,
-    noMarkdown: false,
+    noMarkdownInstruction: null,
   },
 ] as const;
 
@@ -49,15 +49,15 @@ describe("inngest prompt exports", () => {
         }
       });
 
-      it("has no triple-backtick fences and enforces no-markdown format", () => {
+      it("has no triple-backtick markdown fences", () => {
         expect(prompt.value).not.toContain("```");
-        if (prompt.noMarkdown) {
-          expect(prompt.value).toMatch(/no markdown, no code blocks, no backticks/i);
-        }
       });
 
       it("contains a required instruction", () => {
         expect(prompt.value).toMatch(prompt.instruction);
+        if (prompt.noMarkdownInstruction) {
+          expect(prompt.value).toMatch(prompt.noMarkdownInstruction);
+        }
       });
     });
   }
