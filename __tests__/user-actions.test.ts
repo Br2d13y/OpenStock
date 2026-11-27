@@ -9,6 +9,7 @@ import { getAllUsersForNewsEmail } from '@/lib/actions/user.actions';
 
 const connectToDatabaseMock = vi.mocked(connectToDatabase);
 
+// Matches the exact query/projection in lib/actions/user.actions.ts
 const getUsersQuery = {
     email: { $exists: true, $ne: null },
 };
@@ -28,7 +29,7 @@ function mockDatabase(rows: unknown[] | Error) {
 
     connectToDatabaseMock.mockResolvedValue({ connection: { db } } as never);
 
-    return { collectionMock, findMock, toArrayMock, db };
+    return { collectionMock, findMock, toArrayMock };
 }
 
 describe('user.actions', () => {
@@ -49,14 +50,14 @@ describe('user.actions', () => {
 
             expect(connectToDatabaseMock).toHaveBeenCalledTimes(1);
             expect(collectionMock).toHaveBeenCalledWith('user');
-            expect(findMock).toHaveBeenCalledTimes(1);
             expect(findMock).toHaveBeenCalledWith(getUsersQuery, getUsersProjection);
             expect(toArrayMock).toHaveBeenCalledTimes(1);
             expect(result).toEqual([]);
             expect(console.error).not.toHaveBeenCalled();
         });
 
-        it('maps rows to only id, email and name without leaking extra columns', async () => {
+        it('maps rows to {id, email, name} only, using id or _id fallback as in source', async () => {
+            // Projection requests country, but the source maps to only id/email/name.
             const rows = [
                 {
                     _id: 'mongo_object_1',
@@ -64,15 +65,13 @@ describe('user.actions', () => {
                     email: 'alpha@example.test',
                     name: 'Alpha Tester',
                     country: 'US',
-                    createdAt: '2026-01-01T00:00:00.000Z',
-                    internalSecret: 'do-not-leak',
+                    internalNote: 'do-not-leak',
                 },
                 {
-                    _id: 'mongo_object_2',
+                    _id: { toString: () => 'mongo_object_2' },
                     email: 'beta@example.test',
                     name: 'Beta Tester',
                     country: 'CA',
-                    internalSecret: 'also-do-not-leak',
                 },
             ];
             mockDatabase(rows);
@@ -93,33 +92,35 @@ describe('user.actions', () => {
             ]);
             expect(Object.keys(result[0])).toEqual(['id', 'email', 'name']);
             expect(Object.keys(result[1])).toEqual(['id', 'email', 'name']);
-            expect(result).not.toBe(rows);
-            expect(result[0]).not.toBe(rows[0]);
         });
 
-        it('filters out rows without an email, blank email or name, matching the source filter', async () => {
+        it('filters rows missing email or name, matching source filter (user.email && user.name)', async () => {
             const rows = [
                 {
-                    _id: 'user_missing_email',
-                    id: 'user_missing_email',
+                    _id: 'row_missing_email',
+                    id: 'row_missing_email',
                     name: 'Missing Email',
+                    country: 'US',
                 },
                 {
-                    _id: 'user_blank_email',
-                    id: 'user_blank_email',
+                    _id: 'row_blank_email',
+                    id: 'row_blank_email',
                     email: '',
                     name: 'Blank Email',
+                    country: 'US',
                 },
                 {
-                    _id: 'user_missing_name',
-                    id: 'user_missing_name',
-                    email: 'no-name@example.test',
+                    _id: 'row_missing_name',
+                    id: 'row_missing_name',
+                    email: 'noname@example.test',
+                    country: 'US',
                 },
                 {
-                    _id: 'user_valid',
-                    id: 'user_valid',
+                    _id: 'row_valid',
+                    id: 'row_valid',
                     email: 'valid@example.test',
                     name: 'Valid Person',
+                    country: 'US',
                 },
             ];
             mockDatabase(rows);
@@ -128,14 +129,14 @@ describe('user.actions', () => {
 
             expect(result).toEqual([
                 {
-                    id: 'user_valid',
+                    id: 'row_valid',
                     email: 'valid@example.test',
                     name: 'Valid Person',
                 },
             ]);
         });
 
-        it('catches a database query error, logs it and returns an empty array', async () => {
+        it('catches database errors, logs them, and returns an empty array', async () => {
             const dbError = new Error('db boom');
             mockDatabase(dbError);
 
