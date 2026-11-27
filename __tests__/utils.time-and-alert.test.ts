@@ -1,6 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { formatTimeAgo, formatNumber, getAlertText } from '../lib/utils';
 
+type AlertFixture = {
+    id: string;
+    symbol: string;
+    company: string;
+    alertName: string;
+    currentPrice: number;
+    alertType: 'upper' | 'lower';
+    threshold: number;
+    changePercent?: number;
+};
+
 describe('formatTimeAgo', () => {
     const NOW = new Date('2026-01-15T12:00:00Z').getTime();
 
@@ -48,7 +59,7 @@ describe('formatTimeAgo', () => {
         expect(formatTimeAgo(threeDaysAgo)).toBe('3 days ago');
     });
 
-    it('handles the exact 24-hour boundary as hours', () => {
+    it('treats exactly 24 hours as hours (uses diffInHours > 24 for days)', () => {
         const exactly24HoursAgo = Math.floor((NOW - 24 * 60 * 60 * 1000) / 1000);
         expect(formatTimeAgo(exactly24HoursAgo)).toBe('24 hours ago');
     });
@@ -88,12 +99,28 @@ describe('formatNumber', () => {
 
 describe('getAlertText', () => {
     it("returns 'Price > $150.00' for upper alert type", () => {
-        const alert = { alertType: 'upper', threshold: 150 } as Alert;
+        const alert: AlertFixture = {
+            id: 'alert-1',
+            symbol: 'AAPL',
+            company: 'Apple Inc.',
+            alertName: 'Upper target',
+            currentPrice: 145,
+            alertType: 'upper',
+            threshold: 150,
+        };
         expect(getAlertText(alert)).toBe('Price > $150.00');
     });
 
     it("returns 'Price < $99.50' for lower alert type", () => {
-        const alert = { alertType: 'lower', threshold: 99.5 } as Alert;
+        const alert: AlertFixture = {
+            id: 'alert-2',
+            symbol: 'MSFT',
+            company: 'Microsoft Corp.',
+            alertName: 'Lower target',
+            currentPrice: 105,
+            alertType: 'lower',
+            threshold: 99.5,
+        };
         expect(getAlertText(alert)).toBe('Price < $99.50');
     });
 });
