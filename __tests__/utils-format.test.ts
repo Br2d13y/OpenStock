@@ -5,8 +5,32 @@ import {
   validateArticle,
   getAlertText,
   formatPrice,
+  formatCurrency,
   getDateRange,
 } from '../lib/utils';
+
+type RawNewsArticle = {
+  id: number;
+  headline?: string;
+  summary?: string;
+  source?: string;
+  url?: string;
+  datetime?: number;
+  image?: string;
+  category?: string;
+  related?: string;
+};
+
+type Alert = {
+  id: string;
+  symbol: string;
+  company: string;
+  alertName: string;
+  currentPrice: number | string;
+  alertType: 'upper' | 'lower';
+  threshold: number;
+  changePercent?: number;
+};
 
 describe('utils-format', () => {
   it('formatNumber multiplies by 1e6 then applies T/B/M/K suffixes', () => {
@@ -18,45 +42,52 @@ describe('utils-format', () => {
     expect(formatNumber(1500000)).toBe('1.50T');
   });
 
-  it('formatArticle trims fields and applies company/market defaults', () => {
+  it('formatArticle trims fields, truncates summaries, and applies company/market defaults', () => {
     const baseDate = 1700000000;
+    const longCompanySummary = '  ' + 'C'.repeat(220) + '  ';
     const companyArticle: RawNewsArticle = {
       id: 1,
       headline: '  ZZZZ headline  ',
-      summary: '  This is a long summary that should be trimmed and then truncated by formatArticle logic for company news branch in a predictable way for testing purposes.  ',
+      summary: longCompanySummary,
       url: 'https://example.invalid/a',
       datetime: baseDate,
       image: 'https://example.invalid/img.png',
       category: 'tech',
       related: 'OTHER',
+      source: '',
     };
 
     const formattedCompany = formatArticle(companyArticle, true, 'ZZZZ', 0);
     expect(formattedCompany.headline).toBe('ZZZZ headline');
-    expect(formattedCompany.summary.endsWith('...')).toBe(true);
-    expect(formattedCompany.summary.length).toBeLessThanOrEqual(200 + 3);
+    // company branch truncates to 200 chars of trimmed summary, then appends '...'
+    expect(formattedCompany.summary).toBe('C'.repeat(200) + '...');
     expect(formattedCompany.source).toBe('Company News');
     expect(formattedCompany.category).toBe('company');
     expect(formattedCompany.related).toBe('ZZZZ');
+    expect(formattedCompany.url).toBe('https://example.invalid/a');
+    expect(formattedCompany.datetime).toBe(baseDate);
+    expect(formattedCompany.image).toBe('https://example.invalid/img.png');
 
+    const longMarketSummary = '  ' + 'M'.repeat(170) + '  ';
     const marketArticle: RawNewsArticle = {
       id: 2,
       headline: '  Market headline  ',
-      summary: '  Market summary text that is long enough to be truncated by market branch rules in formatArticle implementation for testing.  ',
+      summary: longMarketSummary,
       url: 'https://example.invalid/b',
       datetime: baseDate + 1,
       source: '',
       image: '',
       category: 'general',
-      related: 'ABC',
+      related: 'ZZZZ',
     };
 
     const formattedMarket = formatArticle(marketArticle, false, undefined, 1);
     expect(formattedMarket.headline).toBe('Market headline');
-    expect(formattedMarket.summary.endsWith('...')).toBe(true);
+    // market branch truncates to 150 chars of trimmed summary, then appends '...'
+    expect(formattedMarket.summary).toBe('M'.repeat(150) + '...');
     expect(formattedMarket.source).toBe('Market News');
     expect(formattedMarket.category).toBe('general');
-    expect(formattedMarket.related).toBe('ABC');
+    expect(formattedMarket.related).toBe('ZZZZ');
   });
 
   it('validateArticle returns falsy when required fields missing and truthy when present', () => {
@@ -75,49 +106,54 @@ describe('utils-format', () => {
     expect(validateArticle({ ...valid, datetime: 0 } as RawNewsArticle)).toBeFalsy();
   });
 
-  it('getAlertText uses Price > for upper and Price < otherwise with formatted threshold', () => {
+  it('getAlertText uses Price > for upper and Price < for lower with formatted USD threshold', () => {
     const upperAlert: Alert = {
       id: '1',
       symbol: 'ZZZZ',
       company: 'Fictional Co',
       alertName: 'Upper',
-      currentPrice: '100.00',
+      currentPrice: 100,
       alertType: 'upper',
       threshold: 123.4,
     };
-    expect(getAlertText(upperAlert).startsWith('Price > ')).toBe(true);
-    expect(getAlertText(upperAlert)).toBe(`Price > ${formatPrice(upperAlert.threshold)}`);
+    expect(getAlertText(upperAlert as any)).toBe('Price > $123.40');
 
     const lowerAlert: Alert = {
       id: '2',
       symbol: 'ZZZZ',
       company: 'Fictional Co',
       alertName: 'Lower',
-      currentPrice: '100.00',
+      currentPrice: 100,
       alertType: 'lower',
       threshold: 55.5,
     };
-    expect(getAlertText(lowerAlert).startsWith('Price < ')).toBe(true);
-    expect(getAlertText(lowerAlert)).toBe(`Price < ${formatPrice(lowerAlert.threshold)}`);
+    expect(getAlertText(lowerAlert as any)).toBe('Price < $55.50');
   });
 
-  it('formatPrice/formatCurrency format positive decimal as USD with two fraction digits', () => {
-    const v = 12.3;
-    const fp = formatPrice(v);
-    const fc = (formatPrice as unknown as (n: number) => string)(v); // same function alias
-    expect(fp).toContain('$');
-    expect(/\.\d{2}$/.test(fp)).toBe(true);
-    expect(fc).toContain('$');
-    expect(/\.\d{2}$/.test(fc)).toBe(true);
+  it('formatPrice formats as USD currency with two fraction digits', () => {
+    expect(formatPrice(12.3)).toBe('$12.30');
+    expect(formatPrice(0)).toBe('$0.00');
+    expect(formatPrice(1234.5)).toBe('$1,234.50');
   });
 
-  it('getDateRange returns YYYY-MM-DD {to,from} spanning about n days', () => {
-    const r = getDateRange(7);
+  it('formatCurrency formats as USD currency with two fraction digits', () => {
+    expect(formatCurrency(12.3)).toBe('$12.30');
+    expect(formatCurrency(0)).toBe('$0.00');
+    expect(formatCurrency(1234.5)).toBe('$1,234.50');
+  });
+
+  it('getDateRange returns YYYY-MM-DD {to,from} spanning n days', () => {
+    const n = 7;
+    const r = getDateRange(n);
     const isoRe = /^\d{4}-\d{2}-\d{2}$/;
-    expect(typeof r.to).toBe('string');
-    expect(typeof r.from).toBe('string');
     expect(isoRe.test(r.to)).toBe(true);
     expect(isoRe.test(r.from)).toBe(true);
-    expect(r.from <= r.to).toBe(true);
+
+    const to = new Date(r.to);
+    const from = new Date(r.from);
+    const diffMs = to.getTime() - from.getTime();
+    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+    expect(diffDays).toBe(n);
+    expect(from.getTime()).toBeLessThanOrEqual(to.getTime());
   });
 });
