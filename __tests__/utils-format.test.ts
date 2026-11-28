@@ -9,6 +9,8 @@ import {
   getDateRange,
 } from '../lib/utils';
 
+// Types declared locally to satisfy "no implicit globals" (rule 4).
+// Shapes mirror types/global.d.ts and usage in lib/utils.ts.
 type RawNewsArticle = {
   id: number;
   headline?: string;
@@ -26,7 +28,7 @@ type Alert = {
   symbol: string;
   company: string;
   alertName: string;
-  currentPrice: number | string;
+  currentPrice: number;
   alertType: 'upper' | 'lower';
   threshold: number;
   changePercent?: number;
@@ -116,7 +118,7 @@ describe('utils-format', () => {
       alertType: 'upper',
       threshold: 123.4,
     };
-    expect(getAlertText(upperAlert as any)).toBe('Price > $123.40');
+    expect(getAlertText(upperAlert)).toBe('Price > $123.40');
 
     const lowerAlert: Alert = {
       id: '2',
@@ -127,7 +129,7 @@ describe('utils-format', () => {
       alertType: 'lower',
       threshold: 55.5,
     };
-    expect(getAlertText(lowerAlert as any)).toBe('Price < $55.50');
+    expect(getAlertText(lowerAlert)).toBe('Price < $55.50');
   });
 
   it('formatPrice formats as USD currency with two fraction digits', () => {
@@ -136,7 +138,9 @@ describe('utils-format', () => {
     expect(formatPrice(1234.5)).toBe('$1,234.50');
   });
 
-  it('formatCurrency formats as USD currency with two fraction digits', () => {
+  it('formatCurrency is the formatPrice alias and formats as USD currency with two fraction digits', () => {
+    // lib/utils.ts: `export const formatCurrency = formatPrice;`
+    expect(formatCurrency).toBe(formatPrice);
     expect(formatCurrency(12.3)).toBe('$12.30');
     expect(formatCurrency(0)).toBe('$0.00');
     expect(formatCurrency(1234.5)).toBe('$1,234.50');
